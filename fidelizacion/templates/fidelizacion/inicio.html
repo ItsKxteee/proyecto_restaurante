@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+
+{% block title %}Inicio{% endblock %}
+
+{% block content %}
+
+<div class="text-center py-5">
+    <h1 class="display-4">🍽 Restaurante Sabor & Puntos</h1>
+    <p class="lead mt-3">
+        Bienvenido a nuestro restaurante. Disfruta nuestra carta y acumula puntos por tu fidelidad.
+    </p>
+
+    <div class="mt-4">
+        <a class="btn btn-primary btn-lg me-2" href="{% url 'ver_carta' %}">Ver Carta</a>
+
+        {% if user.is_authenticated %}
+        <a class="btn btn-success btn-lg" href="{% url 'crear_pedido' %}">Hacer Pedido</a>
+        {% else %}
+        <a class="btn btn-success btn-lg" href="{% url 'login' %}">
+            Hacer Pedido
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}
