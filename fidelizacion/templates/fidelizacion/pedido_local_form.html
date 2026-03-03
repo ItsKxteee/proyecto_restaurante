@@ -1,0 +1,199 @@
+{% extends 'base.html' %}
+{% load permisos_tags %}
+
+{% block title %}Pedido local{% endblock %}
+
+{% block content %}
+<h2 class="mb-3">{% if modo == "editar" %}Editar{% else %}Nuevo{% endif %} pedido local</h2>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-4">
+        <input type="text" name="buscar" class="form-control" placeholder="Buscar producto..." value="{{ request.GET.buscar }}">
+    </div>
+    <div class="col-md-4">
+        <select name="categoria" class="form-select">
+            <option value="">Todas las categorias</option>
+            {% for categoria in categorias %}
+            <option value="{{ categoria.id }}" {% if request.GET.categoria == categoria.id|stringformat:"s" %}selected{% endif %}>
+                {{ categoria.nombre }}
+            </option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-4">
+        <button class="btn btn-outline-primary" type="submit">Filtrar carta</button>
+        <a href="{{ request.path }}" class="btn btn-outline-secondary">Limpiar</a>
+    </div>
+</form>
+
+<form method="post">
+    {% csrf_token %}
+
+    <div class="card mb-3">
+        <div class="card-body">
+            {{ form.as_p }}
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger py-2">{{ form.non_field_errors }}</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card mb-3">
+        <div class="card-header">Carta para seleccionar productos</div>
+        <div class="card-body">
+            <div class="alert alert-secondary d-flex justify-content-between align-items-center">
+                <div>
+                    <strong>Resumen en tiempo real</strong><br>
+                    Productos seleccionados: <span id="resumen-items">0</span>
+                </div>
+                <div class="text-end">
+                    Total estimado:<br>
+                    <strong id="resumen-total">$0</strong>
+                </div>
+            </div>
+            <div class="card mb-3">
+                <div class="card-header">Resumen del carrito</div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Producto</th>
+                                    <th class="text-center">Cantidad</th>
+                                    <th class="text-end">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody id="carrito-detalle">
+                                <tr id="carrito-vacio">
+                                    <td colspan="3" class="text-center text-muted py-3">Aun no hay productos seleccionados.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                {% for producto in productos %}
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        {% if producto.imagen %}
+                        <img src="{{ producto.imagen.url }}" class="card-img-top" style="height: 180px; object-fit: cover;">
+                        {% endif %}
+                        <div class="card-body">
+                            <h5 class="card-title">{{ producto.nombre }}</h5>
+                            <p class="card-text small">{{ producto.descripcion }}</p>
+                            <p class="fw-bold text-success mb-2">${{ producto.precio }}</p>
+                            <label for="cantidad_{{ producto.id }}" class="form-label mb-1">Cantidad</label>
+                            <div class="input-group">
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-secondary btn-restar"
+                                    data-target="cantidad_{{ producto.id }}"
+                                >-</button>
+                                <input
+                                    id="cantidad_{{ producto.id }}"
+                                    type="number"
+                                    min="0"
+                                    name="cantidad_{{ producto.id }}"
+                                    value="{{ cantidades|get_item:producto.id }}"
+                                    class="form-control text-center cantidad-input"
+                                    data-precio="{{ producto.precio }}"
+                                    data-nombre="{{ producto.nombre }}"
+                                >
+                                <button
+                                    type="button"
+                                    class="btn btn-outline-secondary btn-sumar"
+                                    data-target="cantidad_{{ producto.id }}"
+                                >+</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12">
+                    <p class="mb-0">No hay productos para los filtros seleccionados.</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Guardar pedido</button>
+    <a href="{% url 'pedidos_local_lista' %}" class="btn btn-secondary">Cancelar</a>
+</form>
+
+<script>
+    (function () {
+        const cantidadInputs = Array.from(document.querySelectorAll(".cantidad-input"));
+        const totalEl = document.getElementById("resumen-total");
+        const itemsEl = document.getElementById("resumen-items");
+        const carritoDetalleEl = document.getElementById("carrito-detalle");
+
+        function normalizarCantidad(valor) {
+            const n = parseInt(valor || "0", 10);
+            return Number.isNaN(n) || n < 0 ? 0 : n;
+        }
+
+        function formatoMoneda(valor) {
+            return valor.toLocaleString("es-CO", {
+                style: "currency",
+                currency: "COP",
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2
+            });
+        }
+
+        function recalcularResumen() {
+            let total = 0;
+            let items = 0;
+            const filas = [];
+            cantidadInputs.forEach((input) => {
+                const cantidad = normalizarCantidad(input.value);
+                const precio = parseFloat(input.dataset.precio || "0");
+                if (cantidad > 0) {
+                    const subtotal = cantidad * precio;
+                    items += cantidad;
+                    total += subtotal;
+                    filas.push(
+                        "<tr>" +
+                        "<td>" + input.dataset.nombre + "</td>" +
+                        "<td class='text-center'>" + cantidad + "</td>" +
+                        "<td class='text-end'>" + formatoMoneda(subtotal) + "</td>" +
+                        "</tr>"
+                    );
+                }
+            });
+            itemsEl.textContent = String(items);
+            totalEl.textContent = formatoMoneda(total);
+            carritoDetalleEl.innerHTML = filas.length
+                ? filas.join("")
+                : "<tr><td colspan='3' class='text-center text-muted py-3'>Aun no hay productos seleccionados.</td></tr>";
+        }
+
+        document.querySelectorAll(".btn-sumar").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const input = document.getElementById(btn.dataset.target);
+                input.value = normalizarCantidad(input.value) + 1;
+                recalcularResumen();
+            });
+        });
+
+        document.querySelectorAll(".btn-restar").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const input = document.getElementById(btn.dataset.target);
+                input.value = Math.max(0, normalizarCantidad(input.value) - 1);
+                recalcularResumen();
+            });
+        });
+
+        cantidadInputs.forEach((input) => {
+            input.addEventListener("input", () => {
+                input.value = normalizarCantidad(input.value);
+                recalcularResumen();
+            });
+        });
+
+        recalcularResumen();
+    })();
+</script>
+{% endblock %}

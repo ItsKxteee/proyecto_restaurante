@@ -1,5 +1,10 @@
 from django.contrib import admin
-from .models import Cliente, EstrategiaFidelizacion, Pedido
+from .models import Cliente, EstrategiaFidelizacion, Mesa, Pedido, PedidoItem
+
+
+class PedidoItemInline(admin.TabularInline):
+    model = PedidoItem
+    extra = 1
 
 
 @admin.register(Cliente)
@@ -15,5 +20,13 @@ class EstrategiaAdmin(admin.ModelAdmin):
 
 @admin.register(Pedido)
 class PedidoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'cliente', 'fecha', 'total')
-    list_filter = ('fecha',)
+    list_display = ('id', 'tipo', 'mesa', 'nombre_cliente', 'cliente', 'fecha', 'total', 'metodo_pago')
+    list_filter = ('tipo', 'metodo_pago', 'fecha')
+    search_fields = ('id', 'nombre_cliente', 'direccion_entrega')
+    inlines = [PedidoItemInline]
+
+
+@admin.register(Mesa)
+class MesaAdmin(admin.ModelAdmin):
+    list_display = ('id', 'numero', 'activa')
+    list_filter = ('activa',)

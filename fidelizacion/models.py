@@ -1,5 +1,10 @@
-from django.db import models
+from decimal import Decimal
+
 from django.contrib.auth.models import User
+from django.db import models
+from django.db.models import Sum
+
+from carta.models import Producto
 
 class Cliente(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, null=True, blank=True)
@@ -21,6 +26,17 @@ class Cliente(models.Model):
         return self.nombre
 
 
+class Mesa(models.Model):
+    numero = models.PositiveIntegerField(unique=True)
+    activa = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["numero"]
+
+    def __str__(self):
+        return f"Mesa {self.numero}"
+
+
 class EstrategiaFidelizacion(models.Model):
     nombre = models.CharField(max_length=150)
     descripcion = models.TextField()
@@ -33,26 +49,93 @@ class EstrategiaFidelizacion(models.Model):
 
 
 class Pedido(models.Model):
+    TIPO_LOCAL = "LOCAL"
+    TIPO_DOMICILIO = "DOMICILIO"
     TIPO_CHOICES = [
-        ('Sitio', 'En el sitio'),
-        ('Domicilio', 'A domicilio'),
+        (TIPO_LOCAL, "En el local"),
+        (TIPO_DOMICILIO, "A domicilio"),
     ]
 
-    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE)
+    PAGO_CHOICES = [
+        ("EFECTIVO", "Efectivo"),
+        ("TARJETA", "Tarjeta"),
+        ("TRANSFERENCIA", "Transferencia"),
+        ("CONTRAENTREGA", "Contraentrega"),
+    ]
+
+    cliente = models.ForeignKey(Cliente, on_delete=models.SET_NULL, null=True, blank=True)
+    creado_por = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="pedidos_creados",
+    )
+    mesa = models.ForeignKey(Mesa, on_delete=models.PROTECT, null=True, blank=True)
+    nombre_cliente = models.CharField(max_length=150, blank=True)
+    telefono_contacto = models.CharField(max_length=20, blank=True)
+    direccion_entrega = models.CharField(max_length=255, blank=True)
     fecha = models.DateTimeField(auto_now_add=True)
     tipo = models.CharField(max_length=20, choices=TIPO_CHOICES)
-    total = models.DecimalField(max_digits=10, decimal_places=2)
-    puntos_generados = models.IntegerField(blank=True, null=True)
+    metodo_pago = models.CharField(max_length=20, choices=PAGO_CHOICES, default="EFECTIVO")
+    observaciones = models.TextField(blank=True)
+    total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    puntos_generados = models.IntegerField(default=0)
+    actualizado = models.DateTimeField(auto_now=True, null=True)
 
-    def save(self, *args, **kwargs):
-        # 1 punto por cada 10 unidades monetarias
-        self.puntos_generados = int(self.total // 10)
+    class Meta:
+        ordering = ["-fecha"]
 
-        super().save(*args, **kwargs)
+    def recalcular_totales(self):
+        total = sum(
+            (item.precio_unitario * item.cantidad for item in self.items.all()),
+            Decimal("0.00"),
+        )
+        puntos = int(total // Decimal("10"))
+        Pedido.objects.filter(pk=self.pk).update(total=total, puntos_generados=puntos)
+        self.total = total
+        self.puntos_generados = puntos
+        self.actualizar_puntos_cliente()
 
-        # sumar puntos al cliente
-        self.cliente.puntos += self.puntos_generados
-        self.cliente.save()
+    def actualizar_puntos_cliente(self):
+        if not self.cliente_id:
+            return
+        puntos_cliente = (
+            Pedido.objects.filter(cliente_id=self.cliente_id).aggregate(total=Sum("puntos_generados"))["total"]
+            or 0
+        )
+        Cliente.objects.filter(pk=self.cliente_id).update(puntos=puntos_cliente)
 
     def __str__(self):
-        return f"Pedido {self.id} - {self.cliente.nombre}"
+        if self.tipo == self.TIPO_LOCAL:
+            return f"Pedido local #{self.id}"
+        return f"Pedido domicilio #{self.id}"
+
+
+class PedidoItem(models.Model):
+    pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name="items")
+    producto = models.ForeignKey(Producto, on_delete=models.PROTECT)
+    cantidad = models.PositiveIntegerField(default=1)
+    precio_unitario = models.DecimalField(max_digits=10, decimal_places=2, editable=False)
+
+    class Meta:
+        verbose_name = "item de pedido"
+        verbose_name_plural = "items de pedido"
+
+    def save(self, *args, **kwargs):
+        if not self.pk:
+            self.precio_unitario = self.producto.precio
+        super().save(*args, **kwargs)
+        self.pedido.recalcular_totales()
+
+    def delete(self, *args, **kwargs):
+        pedido = self.pedido
+        super().delete(*args, **kwargs)
+        pedido.recalcular_totales()
+
+    @property
+    def subtotal(self):
+        return self.precio_unitario * self.cantidad
+
+    def __str__(self):
+        return f"{self.cantidad} x {self.producto.nombre}"

@@ -1,0 +1,13 @@
+{% extends 'base.html' %}
+
+{% block title %}Pedido confirmado{% endblock %}
+
+{% block content %}
+<div class="text-center py-4">
+    <h2>Pedido confirmado</h2>
+    <p>Tu pedido #{{ pedido.id }} fue registrado correctamente.</p>
+    <p>Total estimado: <strong>${{ pedido.total }}</strong></p>
+    <a href="{% url 'ver_carta' %}" class="btn btn-outline-primary">Volver a la carta</a>
+    <a href="{% url 'inicio' %}" class="btn btn-primary">Ir al inicio</a>
+</div>
+{% endblock %}

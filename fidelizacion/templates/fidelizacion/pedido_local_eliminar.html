@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+
+{% block title %}Eliminar pedido{% endblock %}
+
+{% block content %}
+<h2>Eliminar pedido local #{{ pedido.id }}</h2>
+<p>Esta accion no se puede deshacer.</p>
+
+<form method="post">
+    {% csrf_token %}
+    <button type="submit" class="btn btn-danger">Eliminar</button>
+    <a href="{% url 'pedidos_local_lista' %}" class="btn btn-secondary">Cancelar</a>
+</form>
+{% endblock %}

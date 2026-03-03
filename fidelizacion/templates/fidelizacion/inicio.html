@@ -1,26 +1,20 @@
 {% extends 'base.html' %}
+{% load permisos_tags %}
 
 {% block title %}Inicio{% endblock %}
 
 {% block content %}
-
 <div class="text-center py-5">
-    <h1 class="display-4">🍽 Restaurante Sabor & Puntos</h1>
+    <h1 class="display-5">Sistema de pedidos</h1>
     <p class="lead mt-3">
-        Bienvenido a nuestro restaurante. Disfruta nuestra carta y acumula puntos por tu fidelidad.
+        Puedes crear pedidos en el local por mesa o pedir a domicilio.
     </p>
-
     <div class="mt-4">
-        <a class="btn btn-primary btn-lg me-2" href="{% url 'ver_carta' %}">Ver Carta</a>
-
-        {% if user.is_authenticated %}
-        <a class="btn btn-success btn-lg" href="{% url 'crear_pedido' %}">Hacer Pedido</a>
-        {% else %}
-        <a class="btn btn-success btn-lg" href="{% url 'login' %}">
-            Hacer Pedido
-        </a>
+        <a class="btn btn-primary btn-lg me-2" href="{% url 'ver_carta' %}">Ver carta</a>
+        <a class="btn btn-info btn-lg me-2" href="{% url 'pedido_domicilio_crear' %}">Pedir domicilio</a>
+        {% if user|es_mesero_o_admin %}
+        <a class="btn btn-success btn-lg" href="{% url 'pedidos_local_lista' %}">Pedidos local</a>
         {% endif %}
     </div>
 </div>
-
 {% endblock %}
